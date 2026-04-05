@@ -4,8 +4,16 @@ import { useAdminAuth } from '../../context/AdminAuthContext';
 import AdminLayout from './AdminLayout';
 
 export default function RequireAdmin() {
-  const { isAuthenticated } = useAdminAuth();
+  const { authReady, isAuthenticated } = useAdminAuth();
   const location = useLocation();
+
+  if (!authReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100 text-slate-600 text-sm">
+        Loading admin…
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/admin/login" replace state={{ from: location }} />;

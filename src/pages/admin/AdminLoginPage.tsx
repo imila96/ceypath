@@ -4,7 +4,7 @@ import { Lock, User } from 'lucide-react';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 
 export default function AdminLoginPage() {
-  const { isAuthenticated, login } = useAdminAuth();
+  const { authReady, isAuthenticated, login } = useAdminAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/admin';
@@ -12,18 +12,25 @@ export default function AdminLoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  if (isAuthenticated) {
+  if (authReady && isAuthenticated) {
     return <Navigate to="/admin" replace />;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    if (login(username, password)) {
-      navigate(from, { replace: true });
-    } else {
-      setError('Invalid username or password.');
+    setSubmitting(true);
+    try {
+      const ok = await login(username, password);
+      if (ok) {
+        navigate(from, { replace: true });
+      } else {
+        setError('Invalid email/username or password.');
+      }
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -48,7 +55,7 @@ export default function AdminLoginPage() {
         >
           <div>
             <label htmlFor="admin-user" className="block text-sm font-semibold text-gray-700 mb-1.5">
-              Username
+              Email or username
             </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -85,14 +92,15 @@ export default function AdminLoginPage() {
 
           <button
             type="submit"
-            className="w-full py-3 bg-[#003580] text-white font-bold rounded-lg hover:bg-[#002560] transition-colors"
+            disabled={submitting || !authReady}
+            className="w-full py-3 bg-[#003580] text-white font-bold rounded-lg hover:bg-[#002560] transition-colors disabled:opacity-60"
           >
-            Sign in
+            {submitting ? 'Signing in…' : 'Sign in'}
           </button>
 
           <p className="text-xs text-center text-gray-500">
-            Demo credentials: username and password are both <code className="bg-gray-100 px-1 rounded">admin</code>.
-            Replace with a secure backend before production.
+            With Firebase configured: use your <strong>Firebase Auth</strong> email and password. Without Firebase: demo{' '}
+            <code className="bg-gray-100 px-1 rounded">admin</code> / <code className="bg-gray-100 px-1 rounded">admin</code>.
           </p>
         </form>
 

@@ -14,6 +14,7 @@ import {
   MessageSquareQuote,
 } from 'lucide-react';
 import { useAdminAuth } from '../../context/AdminAuthContext';
+import { isFirebaseConfigured } from '../../lib/firebaseApp';
 
 const NAV = [
   { to: '/admin', end: true, label: 'Dashboard', icon: LayoutDashboard },
@@ -111,14 +112,38 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="w-[4.5rem] lg:hidden shrink-0" aria-hidden />
         </header>
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-          <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950 shadow-sm">
-            <p className="font-semibold text-emerald-900 mb-1">Local catalog editor</p>
-            <p className="text-emerald-900/90">
-              Use <strong>Add</strong>, <strong>Edit</strong> (forms with labels), and <strong>Delete</strong>. Each
-              editor has a <strong>Raw JSON</strong> switch if you need full control. Data persists in this browser via{' '}
-              <code className="bg-white/70 px-1 rounded text-xs">localStorage</code>. Package images: form fields for
-              cover &amp; gallery, or JSON.
-            </p>
+          <div
+            className={`mb-6 rounded-xl border px-4 py-3 text-sm shadow-sm ${
+              isFirebaseConfigured()
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+                : 'border-amber-200 bg-amber-50 text-amber-950'
+            }`}
+          >
+            {isFirebaseConfigured() ? (
+              <>
+                <p className="font-semibold text-emerald-900 mb-1">Live catalog (Firebase)</p>
+                <p className="text-emerald-900/90 mb-2">
+                  Visitors and incognito load the same data from <strong>Firestore</strong>. Sign in with your{' '}
+                  <strong>Firebase Auth</strong> user; edits (including Cloudinary image URLs) save to the cloud after you
+                  change something.
+                </p>
+                <p className="text-emerald-900/85 text-xs border-t border-emerald-200/80 pt-2">
+                  Without env vars, the app falls back to local-only storage (see .env.example).
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-semibold text-amber-900 mb-1">This browser only — not shared on the live site</p>
+                <p className="text-amber-900/90 mb-2">
+                  Edits stay in <code className="bg-white/80 px-1 rounded text-xs">localStorage</code> on this profile
+                  only. For production, add <strong>VITE_FIREBASE_*</strong> (see .env.example) so the catalog syncs for
+                  everyone.
+                </p>
+                <p className="text-amber-900/85 text-xs border-t border-amber-200/80 pt-2">
+                  Forms: <strong>Add</strong> / <strong>Edit</strong> / <strong>Delete</strong>, optional <strong>Raw JSON</strong>.
+                </p>
+              </>
+            )}
           </div>
           {children}
         </main>

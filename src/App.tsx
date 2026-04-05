@@ -22,10 +22,12 @@ import AdminMediaPage from './pages/admin/AdminMediaPage';
 import AdminHotelsPage from './pages/admin/AdminHotelsPage';
 import AdminActivitiesPage from './pages/admin/AdminActivitiesPage';
 import AdminTestimonialsPage from './pages/admin/AdminTestimonialsPage';
+import CatalogRemoteSync from './components/CatalogRemoteSync';
 
 export default function App() {
   return (
     <BrowserRouter>
+      <CatalogRemoteSync />
       <AdminAuthProvider>
         <CurrencyProvider>
           <Routes>

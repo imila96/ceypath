@@ -1,16 +1,20 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { getFirebaseAuth, isFirebaseConfigured } from '../lib/firebaseApp';
 
 const SESSION_KEY = 'lankatrips_admin_session';
 
 type AdminAuthContextValue = {
+  /** Firebase has finished restoring session, or legacy mode ready */
+  authReady: boolean;
   isAuthenticated: boolean;
-  login: (username: string, password: string) => boolean;
-  logout: () => void;
+  login: (username: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
 };
 
 const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
 
-function readSession(): boolean {
+function readLegacySession(): boolean {
   try {
     return sessionStorage.getItem(SESSION_KEY) === '1';
   } catch {
@@ -19,12 +23,35 @@ function readSession(): boolean {
 }
 
 export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
-  const [authed, setAuthed] = useState(readSession);
+  const [authReady, setAuthReady] = useState(!isFirebaseConfigured());
+  const [authed, setAuthed] = useState(false);
 
-  const login = useCallback((username: string, password: string) => {
+  useEffect(() => {
+    if (!isFirebaseConfigured()) {
+      setAuthed(readLegacySession());
+      setAuthReady(true);
+      return;
+    }
+
+    const auth = getFirebaseAuth();
+    const unsub = onAuthStateChanged(auth, user => {
+      setAuthed(!!user);
+      setAuthReady(true);
+    });
+    return () => unsub();
+  }, []);
+
+  const login = useCallback(async (username: string, password: string) => {
     const u = username.trim();
-    const p = password;
-    if (u === 'admin' && p === 'admin') {
+    if (isFirebaseConfigured()) {
+      try {
+        await signInWithEmailAndPassword(getFirebaseAuth(), u, password);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    if (u === 'admin' && password === 'admin') {
       try {
         sessionStorage.setItem(SESSION_KEY, '1');
       } catch {
@@ -36,22 +63,31 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     return false;
   }, []);
 
-  const logout = useCallback(() => {
-    try {
-      sessionStorage.removeItem(SESSION_KEY);
-    } catch {
-      /* ignore */
+  const logout = useCallback(async () => {
+    if (isFirebaseConfigured()) {
+      try {
+        await signOut(getFirebaseAuth());
+      } catch {
+        /* ignore */
+      }
+    } else {
+      try {
+        sessionStorage.removeItem(SESSION_KEY);
+      } catch {
+        /* ignore */
+      }
+      setAuthed(false);
     }
-    setAuthed(false);
   }, []);
 
   const value = useMemo(
     () => ({
+      authReady,
       isAuthenticated: authed,
       login,
       logout,
     }),
-    [authed, login, logout]
+    [authReady, authed, login, logout]
   );
 
   return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;
