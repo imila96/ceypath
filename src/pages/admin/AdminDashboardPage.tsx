@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Package,
@@ -13,11 +13,18 @@ import {
 import { usePackages } from '../../hooks/usePackages';
 import { useDestinations } from '../../hooks/useDestinations';
 import { useVehicles } from '../../hooks/useVehicles';
-import { useCatalogStore } from '../../catalog/catalogStore';
+import { getCatalogSnapshot, useCatalogStore } from '../../catalog/catalogStore';
 import { invalidateCatalogQueries } from '../../catalog/catalogInvalidate';
 import { queryClient } from '../../lib/queryClient';
+import { isFirebaseConfigured } from '../../lib/firebaseApp';
+import { saveCatalogToCloud } from '../../lib/catalogFirestore';
+import { useAdminAuth } from '../../context/AdminAuthContext';
 
 export default function AdminDashboardPage() {
+  const { isAuthenticated } = useAdminAuth();
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
   const { data: packages = [], isFetching: pkgLoading } = usePackages();
   const { data: destinations = [], isFetching: destLoading } = useDestinations();
   const { data: vehicles = [], isFetching: vehLoading } = useVehicles();
@@ -84,6 +91,32 @@ export default function AdminDashboardPage() {
     },
   ];
 
+  async function handleForcePushFirestore() {
+    setSyncMessage(null);
+    if (!isFirebaseConfigured()) {
+      setSyncMessage(
+        'Firebase is not configured on this build. Add all six VITE_FIREBASE_* env vars in Vercel and redeploy.'
+      );
+      return;
+    }
+    if (!isAuthenticated) {
+      setSyncMessage('Sign in first — use your Firebase email/password (not demo admin/admin unless Firebase is off).');
+      return;
+    }
+    setSyncing(true);
+    try {
+      const snap = getCatalogSnapshot();
+      await saveCatalogToCloud(snap);
+      setSyncMessage(
+        'Success — catalog (including image URLs) is in Firestore. Open an incognito window, load the site, and you should see the same vehicles/images.'
+      );
+    } catch (e) {
+      setSyncMessage(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   function handleResetDefaults() {
     if (
       !window.confirm(
@@ -104,9 +137,30 @@ export default function AdminDashboardPage() {
         <p className="text-gray-600 mt-1">
           Everything below is editable: use <strong className="text-gray-800">Add</strong> /{' '}
           <strong className="text-gray-800">Edit</strong> / <strong className="text-gray-800">Delete</strong> in each
-          section. Changes save in this browser only until you connect a real API.
+          section. With Firebase env vars on Vercel, edits also sync to Firestore for all visitors.
         </p>
       </div>
+
+      {isFirebaseConfigured() && (
+        <div className="bg-white rounded-xl border border-[#003580]/20 p-4 shadow-sm">
+          <p className="font-semibold text-gray-900 mb-1">Firestore sync</p>
+          <p className="text-sm text-gray-600 mb-3">
+            If incognito still shows old images, click below to upload <strong>this browser’s</strong> catalog (including
+            Cloudinary URLs) to the cloud. You must be signed in with your <strong>Firebase</strong> account.
+          </p>
+          <button
+            type="button"
+            disabled={syncing}
+            onClick={() => void handleForcePushFirestore()}
+            className="px-4 py-2.5 rounded-lg bg-[#003580] text-white font-semibold text-sm hover:bg-[#002560] disabled:opacity-60"
+          >
+            {syncing ? 'Uploading…' : 'Upload catalog to Firestore now'}
+          </button>
+          {syncMessage && (
+            <p className="mt-3 text-sm text-gray-700 whitespace-pre-wrap border-t border-gray-100 pt-3">{syncMessage}</p>
+          )}
+        </div>
+      )}
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {cards.map(({ to, label, count, loading, icon: Icon, hint }) => (
@@ -155,13 +209,15 @@ export default function AdminDashboardPage() {
         </button>
       </div>
 
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
-        <p className="font-semibold mb-1">Demo login</p>
-        <p>
-          Admin password is only for demos. For production, use server-side auth. Catalog is stored in{' '}
-          <code className="bg-white/80 px-1 rounded">localStorage</code> — not synced between devices or users.
-        </p>
-      </div>
+      {!isFirebaseConfigured() && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+          <p className="font-semibold mb-1">Local-only mode</p>
+          <p>
+            Firebase env vars are not set — catalog stays in <code className="bg-white/80 px-1 rounded">localStorage</code>{' '}
+            only. Add <code className="bg-white/80 px-1 rounded">VITE_FIREBASE_*</code> on Vercel to sync for everyone.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
